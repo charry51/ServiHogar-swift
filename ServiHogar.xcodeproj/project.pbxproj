@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BE0481FC2F697EC000195027 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = BE0481FB2F697EC000195027 /* FirebaseCore */; };
+		BE0481FE2F697ECB00195027 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = BE0481FD2F697ECB00195027 /* FirebaseFirestore */; };
+		BE7049D02F69800800FB5485 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = BE7049CF2F69800800FB5485 /* FirebaseAuth */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		BEB755B32F47285C009EE5A6 /* ServiHogar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ServiHogar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,16 +42,27 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE0481FC2F697EC000195027 /* FirebaseCore in Frameworks */,
+				BE7049D02F69800800FB5485 /* FirebaseAuth in Frameworks */,
+				BE0481FE2F697ECB00195027 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BE0481FA2F697EC000195027 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		BEB755AA2F47285C009EE5A6 = {
 			isa = PBXGroup;
 			children = (
 				BEB755B52F47285C009EE5A6 /* ServiHogar */,
+				BE0481FA2F697EC000195027 /* Frameworks */,
 				BEB755B42F47285C009EE5A6 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -78,6 +95,9 @@
 			);
 			name = ServiHogar;
 			packageProductDependencies = (
+				BE0481FB2F697EC000195027 /* FirebaseCore */,
+				BE0481FD2F697ECB00195027 /* FirebaseFirestore */,
+				BE7049CF2F69800800FB5485 /* FirebaseAuth */,
 			);
 			productName = ServiHogar;
 			productReference = BEB755B32F47285C009EE5A6 /* ServiHogar.app */;
@@ -107,6 +127,9 @@
 			);
 			mainGroup = BEB755AA2F47285C009EE5A6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BED1E5022F697D56009EECE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BEB755B42F47285C009EE5A6 /* Products */;
 			projectDirPath = "";
@@ -347,6 +370,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BED1E5022F697D56009EECE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.11.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BE0481FB2F697EC000195027 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BED1E5022F697D56009EECE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		BE0481FD2F697ECB00195027 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BED1E5022F697D56009EECE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		BE7049CF2F69800800FB5485 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BED1E5022F697D56009EECE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BEB755AB2F47285C009EE5A6 /* Project object */;
 }

@@ -1,26 +1,24 @@
 import SwiftUI
 import PhotosUI
+import FirebaseAuth
+import FirebaseFirestore
 
 // ==========================================
-// 1. MODELOS DE DATOS (Compartidos para toda la app)
+// MODELOS DE DATOS
 // ==========================================
 struct ModeloSolicitud: Codable, Identifiable {
-    let id: Int
+    var id: String?
     let categoria, descripcion, ubicacion, foto, estado: String?
     let cliente: DatosUsuario?
 }
 
-struct RespuestaLogin: Codable {
-    let user: DatosUsuario?
-}
-
 struct DatosUsuario: Codable {
-    let id: Int?
-    let role, name, telefono, foto, domicilio: String?
+    var id: String?
+    var role, name, telefono, foto, domicilio, dni: String?
 }
 
 // ==========================================
-// 2. PANTALLA DE LOGIN (Punto de entrada)
+// PANTALLA DE LOGIN
 // ==========================================
 struct ContentView: View {
     @State private var email: String = ""
@@ -31,8 +29,9 @@ struct ContentView: View {
     @State private var navegarCliente: Bool = false
     @State private var navegarProfesional: Bool = false
     
+    // --- VARIABLES DE USUARIO (El ID ahora es String) ---
     @State private var nombreUsuario: String = ""
-    @State private var idUsuario: Int = 0
+    @State private var idUsuario: String = ""
     @State private var fotoUsuario: String = ""
     @State private var telefonoUsuario: String = ""
     @State private var domicilioUsuario: String = ""
@@ -62,7 +61,8 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Image("FondoLogin").resizable().scaledToFill().ignoresSafeArea())
-            // NAVEGACIÓN HACIA LOS ARCHIVOS INDEPENDIENTES
+            
+            // --- RUTAS CORREGIDAS ---
             .navigationDestination(isPresented: $navegarCliente) {
                 HomeClienteView(nombreUsuario: $nombreUsuario, idUsuario: idUsuario, fotoUsuario: $fotoUsuario, telefonoUsuario: $telefonoUsuario, domicilioUsuario: $domicilioUsuario, alCerrarSesion: { navegarCliente = false; resetearApp() })
             }
@@ -73,47 +73,54 @@ struct ContentView: View {
     }
     
     func resetearApp() {
-        email = ""; password = ""; nombreUsuario = ""; idUsuario = 0; fotoUsuario = ""; telefonoUsuario = ""; domicilioUsuario = ""
+        email = ""; password = ""; nombreUsuario = ""; idUsuario = ""; fotoUsuario = ""; telefonoUsuario = ""; domicilioUsuario = ""
     }
     
     func hacerLogin() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/login") else { return }
-        var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let bodyDatos = ["email": email, "password": password]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: bodyDatos)
-        
-        URLSession.shared.dataTask(with: request) { data, response, _ in
-            DispatchQueue.main.async {
-                if let data = data, let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                    if let resultado = try? JSONDecoder().decode(RespuestaLogin.self, from: data) {
-                        self.nombreUsuario = resultado.user?.name ?? "Usuario"
-                        self.idUsuario = resultado.user?.id ?? 0
-                        self.fotoUsuario = resultado.user?.foto ?? ""
-                        self.telefonoUsuario = resultado.user?.telefono ?? ""
-                        self.domicilioUsuario = resultado.user?.domicilio ?? ""
-                        if resultado.user?.role == "cliente" { self.navegarCliente = true }
+            // Limpiamos email y contraseña de espacios fantasma
+            let emailLimpio = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let passLimpio = password.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            print("🔑 Intentando login con: '\(emailLimpio)' y pass de \(passLimpio.count) caracteres")
+            
+            Auth.auth().signIn(withEmail: emailLimpio, password: passLimpio) { resultado, error in
+                if let error = error {
+                    self.mensajeError = "Credenciales incorrectas"
+                    print("❌ Error Login: \(error.localizedDescription)")
+                    return
+                }
+                
+                guard let uid = resultado?.user.uid else { return }
+                print("✅ Login correcto. Buscando datos del usuario...")
+                
+                let db = Firestore.firestore()
+                db.collection("usuarios").document(uid).getDocument { documento, error in
+                    if let data = documento?.data() {
+                        self.idUsuario = uid
+                        self.nombreUsuario = data["name"] as? String ?? "Usuario"
+                        self.fotoUsuario = data["foto"] as? String ?? ""
+                        self.telefonoUsuario = data["telefono"] as? String ?? ""
+                        self.domicilioUsuario = data["domicilio"] as? String ?? ""
+                        
+                        let role = data["role"] as? String ?? "cliente"
+                        if role == "cliente" { self.navegarCliente = true }
                         else { self.navegarProfesional = true }
                     }
-                } else { self.mensajeError = "Credenciales incorrectas" }
+                }
             }
-        }.resume()
-    }
+        }
 }
 
 // ==========================================
-// 3. VISTAS DE REGISTRO
+// VISTAS DE REGISTRO
 // ==========================================
 struct BienvenidoView: View {
     let azulTexto = Color(red: 0, green: 0.38, blue: 0.66)
     var body: some View {
         VStack(spacing: 40) {
             Text("¡ Bienvenido !").font(.system(size: 28, weight: .bold)).foregroundColor(azulTexto).padding(.top, 60)
-            NavigationLink(destination: RegistroClienteView()) {
-                Text("Cliente").font(.system(size: 18, weight: .bold)).foregroundColor(azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(25).shadow(radius: 5)
-            }
-            NavigationLink(destination: RegistroProfesionalView()) {
-                Text("Trabajador").font(.system(size: 18, weight: .bold)).foregroundColor(azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(25).shadow(radius: 5)
-            }
+            NavigationLink(destination: RegistroClienteView()) { Text("Cliente").font(.system(size: 18, weight: .bold)).foregroundColor(azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(25).shadow(radius: 5) }
+            NavigationLink(destination: RegistroProfesionalView()) { Text("Trabajador").font(.system(size: 18, weight: .bold)).foregroundColor(azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(25).shadow(radius: 5) }
             Spacer()
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
     }
@@ -130,9 +137,7 @@ struct RegistroClienteView: View {
             CampoFormulario(titulo: "Domicilio", texto: $domicilio, colorTexto: azulTexto)
             CampoFormulario(titulo: "Teléfono", texto: $telefono, colorTexto: azulTexto)
             Spacer()
-            NavigationLink(destination: RegistroClientePaso2View(nombre: nombre, dni: dni, domicilio: domicilio, telefono: telefono)) {
-                Text("Siguiente >").bold().foregroundColor(azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(25).shadow(radius: 5)
-            }.padding(.bottom, 40)
+            NavigationLink(destination: RegistroClientePaso2View(nombre: nombre, dni: dni, domicilio: domicilio, telefono: telefono)) { Text("Siguiente >").bold().foregroundColor(azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(25).shadow(radius: 5) }.padding(.bottom, 40)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
     }
 }
@@ -146,17 +151,36 @@ struct RegistroClientePaso2View: View {
             CampoFormulario(titulo: "Email", texto: $email, colorTexto: Color(red: 0, green: 0.38, blue: 0.66))
             CampoPassword(titulo: "Contraseña", texto: $pass, colorTexto: Color(red: 0, green: 0.38, blue: 0.66))
             Spacer()
-            Button(action: registrar) {
-                Text("Finalizar").bold().foregroundColor(.white).frame(width: 160, height: 45).background(Color(red: 0, green: 0.38, blue: 0.66)).cornerRadius(25)
-            }.padding(.bottom, 40)
-            .navigationDestination(isPresented: $exito) { ContentView().navigationBarBackButtonHidden(true) }
+            Button(action: registrar) { Text("Finalizar").bold().foregroundColor(.white).frame(width: 160, height: 45).background(Color(red: 0, green: 0.38, blue: 0.66)).cornerRadius(25) }.padding(.bottom, 40).navigationDestination(isPresented: $exito) { ContentView().navigationBarBackButtonHidden(true) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
     }
+    
+    // --- LÓGICA DE REGISTRO CON CHIVATOS ---
     func registrar() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/register") else { return }
-        var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["name": nombre, "email": email, "password": pass, "role": "cliente", "dni": dni, "telefono": telefono, "domicilio": domicilio]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body); URLSession.shared.dataTask(with: request) { _, resp, _ in if (resp as? HTTPURLResponse)?.statusCode == 201 { DispatchQueue.main.async { exito = true }} }.resume()
+        print("🔄 1. Intentando crear CLIENTE en Firebase...")
+        Auth.auth().createUser(withEmail: email, password: pass) { resultado, error in
+            if let error = error {
+                print("❌ ERROR AL CREAR CORREO: \(error.localizedDescription)")
+                return
+            }
+            
+            if let uid = resultado?.user.uid {
+                print("✅ 2. Correo creado (UID: \(uid)). Intentando enviar datos a Firestore...")
+                let db = Firestore.firestore()
+                db.collection("usuarios").document(uid).setData([
+                    "uid": uid, "name": nombre, "dni": dni, "domicilio": domicilio, "telefono": telefono, "role": "cliente", "email": email
+                ]) { errorFS in
+                    if let errorFS = errorFS {
+                        print("❌ ERROR DE FIRESTORE: \(errorFS.localizedDescription)")
+                    } else {
+                        print("✅ 3. ¡DATOS DE CLIENTE GUARDADOS CORRECTAMENTE EN FIRESTORE!")
+                        DispatchQueue.main.async {
+                            exito = true
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -173,15 +197,11 @@ struct RegistroProfesionalView: View {
             Text("Oficios:").font(.caption.bold()).foregroundColor(azulTexto)
             LazyVGrid(columns: [GridItem(), GridItem()]) {
                 ForEach(lista, id:\.self) { p in
-                    Button(action: { if profs.contains(p) { profs.remove(p) } else { profs.insert(p) }}) {
-                        HStack { Image(systemName: profs.contains(p) ? "checkmark.circle.fill" : "circle"); Text(p) }.foregroundColor(azulTexto)
-                    }
+                    Button(action: { if profs.contains(p) { profs.remove(p) } else { profs.insert(p) }}) { HStack { Image(systemName: profs.contains(p) ? "checkmark.circle.fill" : "circle"); Text(p) }.foregroundColor(azulTexto) }
                 }
             }.padding(.horizontal)
             Spacer()
-            NavigationLink(destination: RegistroProfesionalPaso2View(nombre: nombre, dni: dni, telefono: telefono, profesiones: Array(profs))) {
-                Text("Siguiente").bold().foregroundColor(azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(25).shadow(radius: 5)
-            }.padding(.bottom, 30)
+            NavigationLink(destination: RegistroProfesionalPaso2View(nombre: nombre, dni: dni, telefono: telefono, profesiones: Array(profs))) { Text("Siguiente").bold().foregroundColor(azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(25).shadow(radius: 5) }.padding(.bottom, 30)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
     }
 }
@@ -194,20 +214,41 @@ struct RegistroProfesionalPaso2View: View {
             Text("Datos de Acceso").bold().foregroundColor(Color(red: 0, green: 0.38, blue: 0.66))
             CampoFormulario(titulo: "Email", texto: $email, colorTexto: Color(red: 0, green: 0.38, blue: 0.66))
             CampoPassword(titulo: "Contraseña", texto: $pass, colorTexto: Color(red: 0, green: 0.38, blue: 0.66))
-            Button("Registrarme") { registrar() }.buttonStyle(.borderedProminent).padding()
-            .navigationDestination(isPresented: $exito) { ContentView().navigationBarBackButtonHidden(true) }
+            Button("Registrarme") { registrar() }.buttonStyle(.borderedProminent).padding().navigationDestination(isPresented: $exito) { ContentView().navigationBarBackButtonHidden(true) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
     }
+    
+    // --- LÓGICA DE REGISTRO CON CHIVATOS ---
     func registrar() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/register") else { return }
-        var request = URLRequest(url: url); request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["name": nombre, "email": email, "password": pass, "role": "profesional", "dni": dni, "telefono": telefono, "profesiones": profesiones]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body); URLSession.shared.dataTask(with: request) { _, resp, _ in if (resp as? HTTPURLResponse)?.statusCode == 201 { DispatchQueue.main.async { exito = true }} }.resume()
+        print("🔄 1. Intentando crear PROFESIONAL en Firebase...")
+        Auth.auth().createUser(withEmail: email, password: pass) { resultado, error in
+            if let error = error {
+                print("❌ ERROR AL CREAR CORREO: \(error.localizedDescription)")
+                return
+            }
+            
+            if let uid = resultado?.user.uid {
+                print("✅ 2. Correo creado (UID: \(uid)). Intentando enviar datos a Firestore...")
+                let db = Firestore.firestore()
+                db.collection("usuarios").document(uid).setData([
+                    "uid": uid, "name": nombre, "dni": dni, "telefono": telefono, "profesiones": profesiones, "role": "profesional", "email": email
+                ]) { errorFS in
+                    if let errorFS = errorFS {
+                        print("❌ ERROR DE FIRESTORE: \(errorFS.localizedDescription)")
+                    } else {
+                        print("✅ 3. ¡DATOS DE PROFESIONAL GUARDADOS CORRECTAMENTE EN FIRESTORE!")
+                        DispatchQueue.main.async {
+                            exito = true
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 // ==========================================
-// 4. COMPONENTES GLOBALES (Usados en toda la App)
+// COMPONENTES GLOBALES
 // ==========================================
 struct ImagenBase64: View {
     let base64String: String
@@ -230,19 +271,13 @@ struct BotonPestaña: View {
 struct CampoFormulario: View {
     var titulo: String; @Binding var texto: String; var colorTexto: Color
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(titulo).bold().foregroundColor(colorTexto); TextField("", text: $texto).padding(10).background(Color.white).cornerRadius(5).autocorrectionDisabled()
-        }.padding(.horizontal, 40)
+        VStack(alignment: .leading) { Text(titulo).bold().foregroundColor(colorTexto); TextField("", text: $texto).padding(10).background(Color.white).cornerRadius(5).autocorrectionDisabled() }.padding(.horizontal, 40)
     }
 }
 
 struct CampoPassword: View {
     var titulo: String; @Binding var texto: String; var colorTexto: Color
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(titulo).bold().foregroundColor(colorTexto); SecureField("", text: $texto).padding(10).background(Color.white).cornerRadius(5)
-        }.padding(.horizontal, 40)
+        VStack(alignment: .leading) { Text(titulo).bold().foregroundColor(colorTexto); SecureField("", text: $texto).padding(10).background(Color.white).cornerRadius(5) }.padding(.horizontal, 40)
     }
 }
-
-struct ContentView_Previews: PreviewProvider { static var previews: some View { ContentView() } }
