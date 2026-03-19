@@ -5,56 +5,40 @@ import PhotosUI
 // PANTALLA PRINCIPAL DEL CLIENTE
 // ==========================================
 struct HomeClienteView: View {
-    let azulTexto = Color(red: 0, green: 0.38, blue: 0.66)
+    @EnvironmentObject var session: UserSession
     @Environment(\.dismiss) var dismiss
     
-    @Binding var nombreUsuario: String
-    var idUsuario: Int
-    @Binding var fotoUsuario: String
-    @Binding var telefonoUsuario: String
-    @Binding var domicilioUsuario: String
-    var alCerrarSesion: () -> Void
-
     var body: some View {
         VStack(spacing: 0) {
             // CABECERA
             HStack {
-                Button(action: alCerrarSesion) {
+                Button(action: { session.logout() }) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
                         .bold()
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
-                        .contentShape(Rectangle()) // Área táctil mejorada
+                        .contentShape(Rectangle())
                 }
                 Spacer()
                 
-                NavigationLink(destination: PerfilView(
-                    nombre: nombreUsuario, id: idUsuario, fotoBase64: fotoUsuario, telefono: telefonoUsuario, domicilio: domicilioUsuario, esProfesional: false,
-                    alCerrarSesion: { dismiss(); self.alCerrarSesion() },
-                    alGuardar: { n, f, t, d, _ in self.nombreUsuario = n; self.fotoUsuario = f; self.telefonoUsuario = t; self.domicilioUsuario = d }
-                )) {
-                    ZStack {
-                        if let data = Data(base64Encoded: fotoUsuario), let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage).resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "person.crop.circle.fill").font(.title).foregroundColor(.white)
-                        }
-                    }.frame(width: 40, height: 40).clipShape(Circle())
+                // NAVEGACIÓN AL PERFIL
+                NavigationLink(destination: PerfilView()) {
+                    ImagenPerfil(foto: session.foto)
                 }
-            }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
+            }.padding(.horizontal, Theme.paddingHorizontal).padding(.top, 10).padding(.bottom, 20)
             
             // LISTA DE SERVICIOS
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    TarjetaServicio(tituloUI: "Fontanería", categoriaDB: "Fontanero", imagen: "FotoFontaneria", idUsuario: idUsuario)
-                    TarjetaServicio(tituloUI: "Limpieza", categoriaDB: "Limpieza", imagen: "FotoLimpieza", idUsuario: idUsuario)
-                    TarjetaServicio(tituloUI: "Electricidad", categoriaDB: "Electricista", imagen: "FotoElectricidad", idUsuario: idUsuario)
-                    TarjetaServicio(tituloUI: "Carpintería", categoriaDB: "Carpintero", imagen: "FotoCarpinteria", idUsuario: idUsuario)
-                }.padding(.horizontal, 20)
+                    TarjetaServicio(tituloUI: "Fontanería", categoriaDB: "Fontanero", imagen: "FotoFontaneria")
+                    TarjetaServicio(tituloUI: "Limpieza", categoriaDB: "Limpieza", imagen: "FotoLimpieza")
+                    TarjetaServicio(tituloUI: "Electricidad", categoriaDB: "Electricista", imagen: "FotoElectricidad")
+                    TarjetaServicio(tituloUI: "Carpintería", categoriaDB: "Carpintero", imagen: "FotoCarpinteria")
+                }.padding(.horizontal, Theme.paddingHorizontal)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
+        .background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
     }
 }
@@ -64,10 +48,9 @@ struct HomeClienteView: View {
 // ==========================================
 struct TarjetaServicio: View {
     var tituloUI, categoriaDB, imagen: String
-    var idUsuario: Int
     
     var body: some View {
-        NavigationLink(destination: CrearSolicitudView(categoriaUI: tituloUI, categoriaDB: categoriaDB, idUsuario: idUsuario)) {
+        NavigationLink(destination: CrearSolicitudView(categoriaUI: tituloUI, categoriaDB: categoriaDB)) {
             VStack(spacing: 0) {
                 Image(imagen)
                     .resizable()
@@ -77,12 +60,12 @@ struct TarjetaServicio: View {
                 
                 Text(tituloUI)
                     .bold()
-                    .foregroundColor(Color(red: 0, green: 0.38, blue: 0.66))
+                    .foregroundColor(Theme.azulTexto)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
                     .background(Color.white)
             }
-            .cornerRadius(15)
+            .cornerRadius(Theme.cornerRadiusTarjeta)
             .shadow(radius: 5)
         }
         .buttonStyle(PlainButtonStyle())
@@ -93,8 +76,8 @@ struct TarjetaServicio: View {
 // CREAR SOLICITUD (Solo lo usa el Cliente)
 // ==========================================
 struct CrearSolicitudView: View {
+    @EnvironmentObject var session: UserSession
     var categoriaUI, categoriaDB: String
-    var idUsuario: Int
     @Environment(\.dismiss) var dismiss
     
     @State private var descripcion = ""
@@ -102,9 +85,14 @@ struct CrearSolicitudView: View {
     @State private var fotoBase64 = ""
     @State private var imagenConvertida: Image? = nil
     @State private var fotoSeleccionada: PhotosPickerItem? = nil
+    @State private var enviando = false
+    
+    @State private var mostrarAlerta = false
+    @State private var mensajeAlerta = ""
     
     var body: some View {
         VStack {
+            // ... (HStack and ScrollView unchanged)
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left").bold().foregroundColor(.white).frame(width: 40, height: 40).contentShape(Rectangle())
@@ -112,24 +100,23 @@ struct CrearSolicitudView: View {
                 Spacer()
                 Text("Pedir \(categoriaUI)").bold().foregroundColor(.white)
                 Spacer()
-                // Espacio vacío para equilibrar la cabecera
                 Color.clear.frame(width: 40, height: 40)
             }.padding()
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 15) {
+                VStack(alignment: .leading, spacing: Theme.spacingElementos) {
                     TextField("Ubicación", text: $ubicacion)
-                        .padding().background(Color.white).cornerRadius(10)
+                        .padding().background(Color.white).cornerRadius(Theme.cornerRadiusCampo)
                     
                     TextEditor(text: $descripcion)
-                        .frame(height: 100).padding(5).background(Color.white).cornerRadius(10)
+                        .frame(height: 100).padding(5).background(Color.white).cornerRadius(Theme.cornerRadiusCampo)
                     
                     PhotosPicker(selection: $fotoSeleccionada, matching: .images) {
                         if let imagenConvertida {
-                            imagenConvertida.resizable().scaledToFill().frame(height: 150).cornerRadius(10)
+                            imagenConvertida.resizable().scaledToFill().frame(height: 150).cornerRadius(Theme.cornerRadiusCampo)
                         } else {
                             Label("Subir Foto", systemImage: "camera")
-                                .frame(maxWidth: .infinity).frame(height: 100).background(Color.white).cornerRadius(10)
+                                .frame(maxWidth: .infinity).frame(height: 100).background(Color.white).cornerRadius(Theme.cornerRadiusCampo)
                         }
                     }
                     .onChange(of: fotoSeleccionada) { newItem in
@@ -142,26 +129,47 @@ struct CrearSolicitudView: View {
                     }
                 }.padding()
             }
-            Button("Enviar Solicitud") { enviar() }.buttonStyle(.borderedProminent).padding()
+            
+            Button(action: { Task { await enviar() } }) {
+                if enviando {
+                    ProgressView().tint(.white)
+                } else {
+                    Text("Enviar Solicitud").bold()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.azulBoton)
+            .padding()
+            .disabled(enviando)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
+        .background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .alert(mensajeAlerta, isPresented: $mostrarAlerta) { Button("OK", role: .cancel) { } }
     }
     
-    func enviar() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/solicitudes") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    func enviar() async {
+        enviando = true
+        let body: [String: Any] = [
+            "cliente_id": session.id,
+            "categoria": categoriaDB,
+            "descripcion": descripcion,
+            "ubicacion": ubicacion,
+            "foto": fotoBase64
+        ]
         
-        let body: [String: Any] = ["cliente_id": idUsuario, "categoria": categoriaDB, "descripcion": descripcion, "ubicacion": ubicacion, "foto": fotoBase64]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { _, resp, _ in
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                DispatchQueue.main.async { dismiss() }
+        do {
+            let exito = try await NetworkService.shared.performSimpleRequest(route: "/solicitudes", method: "POST", body: body)
+            if exito {
+                dismiss()
+            } else {
+                mensajeAlerta = "Error: El servidor rechazó la solicitud."
+                mostrarAlerta = true
             }
-        }.resume()
+        } catch {
+            mensajeAlerta = "Error de conexión: \(error.localizedDescription)"
+            mostrarAlerta = true
+        }
+        enviando = false
     }
 }

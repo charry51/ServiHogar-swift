@@ -5,33 +5,30 @@ import PhotosUI
 // PANTALLA DE PERFIL (Cliente y Profesional)
 // ==========================================
 struct PerfilView: View {
+    @EnvironmentObject var session: UserSession
     @Environment(\.dismiss) var dismiss
     
-    // Aquí definimos tu azul corporativo
-    let azulTexto = Color(red: 0, green: 0.38, blue: 0.66)
-    
-    @State var nombre: String
-    var id: Int
-    @State var fotoBase64: String
-    @State var telefono: String
-    @State var domicilio: String
-    var esProfesional: Bool
-    
-    var alCerrarSesion: () -> Void
-    var alGuardar: (String, String, String, String, String) -> Void
-    
+    @State private var nombre: String = ""
+    @State private var fotoBase64: String = ""
+    @State private var telefono: String = ""
+    @State private var domicilio: String = ""
     @State private var password = ""
     @State private var fotoSeleccionada: PhotosPickerItem? = nil
+    @State private var guardando = false
+    @State private var profesiones: Set<String> = []
+    @State private var mostrarAlerta = false
+    @State private var mensajeAlerta = ""
+    let listaOficios = ["Fontanero", "Electricista", "Carpintero", "Limpieza", "Pintor"]
     
     var body: some View {
         VStack(spacing: 0) {
-            // --- CABECERA (Ahora en color Azul) ---
+            // ... (Cabecera unchanged)
             HStack {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")
                         .font(.title2)
                         .bold()
-                        .foregroundColor(azulTexto) // Flecha azul
+                        .foregroundColor(Theme.azulTexto)
                         .frame(width: 40, height: 40)
                 }
                 Spacer()
@@ -39,13 +36,12 @@ struct PerfilView: View {
                 Text("Mi Perfil")
                     .font(.title2)
                     .bold()
-                    .foregroundColor(azulTexto) // Letras de arriba en azul
+                    .foregroundColor(Theme.azulTexto)
                 
                 Spacer()
-                // Espacio invisible para centrar el texto exactamente en medio
                 Color.clear.frame(width: 40, height: 40)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, Theme.paddingHorizontal)
             .padding(.top, 10)
             .padding(.bottom, 20)
             
@@ -54,28 +50,15 @@ struct PerfilView: View {
                     
                     // --- FOTO DE PERFIL ---
                     ZStack(alignment: .bottomTrailing) {
-                        if let data = Data(base64Encoded: fotoBase64, options: .ignoreUnknownCharacters), let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
-                                .resizable().scaledToFill()
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .shadow(radius: 5)
-                        } else {
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                                .foregroundColor(azulTexto.opacity(0.8))
-                                .frame(width: 120, height: 120)
-                                .background(Circle().fill(Color.white))
-                                .shadow(radius: 5)
-                        }
+                        ImagenPerfil(foto: fotoBase64, size: 120)
+                            .shadow(radius: 5)
                         
-                        // Botón para cambiar foto
                         PhotosPicker(selection: $fotoSeleccionada, matching: .images) {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.white)
                                 .padding(10)
-                                .background(azulTexto)
+                                .background(Theme.azulBoton)
                                 .clipShape(Circle())
                                 .shadow(radius: 3)
                         }
@@ -91,68 +74,107 @@ struct PerfilView: View {
                     .padding(.bottom, 10)
                     
                     // --- CAMPOS DE TEXTO ---
-                    VStack(spacing: 15) {
-                        CampoFormularioPerfil(titulo: "Nombre", texto: $nombre, colorTexto: azulTexto)
-                        CampoFormularioPerfil(titulo: "Teléfono", texto: $telefono, colorTexto: azulTexto)
-                        CampoFormularioPerfil(titulo: "Domicilio", texto: $domicilio, colorTexto: azulTexto)
-                        CampoPasswordPerfil(titulo: "Nueva Contraseña (Opcional)", texto: $password, colorTexto: azulTexto)
+                    VStack(spacing: Theme.spacingElementos) {
+                        CampoFormularioPerfil(titulo: "Nombre", texto: $nombre)
+                        CampoFormularioPerfil(titulo: "Teléfono", texto: $telefono)
+                        CampoFormularioPerfil(titulo: "Domicilio", texto: $domicilio)
+                        
+                        if session.role == "profesional" {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Mis Oficios").bold().foregroundColor(Theme.azulTexto)
+                                LazyVGrid(columns: [GridItem(), GridItem()], spacing: 10) {
+                                    ForEach(listaOficios, id: \.self) { oficio in
+                                        Button(action: {
+                                            if profesiones.contains(oficio) { profesiones.remove(oficio) }
+                                            else { profesiones.insert(oficio) }
+                                        }) {
+                                            HStack {
+                                                Image(systemName: profesiones.contains(oficio) ? "checkmark.circle.fill" : "circle")
+                                                Text(oficio)
+                                            }
+                                            .foregroundColor(Theme.azulTexto)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .padding(10)
+                                            .background(Color.white)
+                                            .cornerRadius(8)
+                                            .shadow(radius: 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        CampoPasswordPerfil(titulo: "Nueva Contraseña (Opcional)", texto: $password)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Theme.paddingHorizontal)
                     
                 }
             }
             
-            // --- BOTÓN DE GUARDAR (Ahora en color Azul) ---
-            Button(action: guardarCambios) {
-                Text("Guardar Cambios")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white) // Letras blancas
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(azulTexto) // Fondo del botón Azul
-                    .cornerRadius(25)
-                    .shadow(radius: 5)
+            // --- BOTÓN DE GUARDAR ---
+            Button(action: { Task { await guardarCambios() } }) {
+                if guardando {
+                    ProgressView().tint(.white)
+                } else {
+                    Text("Guardar Cambios")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(Theme.azulBoton)
+            .cornerRadius(Theme.cornerRadiusBoton)
+            .shadow(radius: 5)
             .padding(.horizontal, 40)
             .padding(.bottom, 30)
             .padding(.top, 10)
+            .disabled(guardando)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
+        .background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .alert(mensajeAlerta, isPresented: $mostrarAlerta) { Button("OK", role: .cancel) { } }
+        .onAppear {
+            self.nombre = session.nombre
+            self.fotoBase64 = session.foto
+            self.telefono = session.telefono
+            self.domicilio = session.domicilio
+            self.profesiones = Set(session.profesiones)
+        }
     }
     
     // --- FUNCIÓN GUARDAR ---
-    func guardarCambios() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/perfil/actualizar") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+    func guardarCambios() async {
+        guardando = true
         var body: [String: Any] = [
-            "id": id,
+            "id": session.id,
             "name": nombre,
             "telefono": telefono,
             "domicilio": domicilio,
             "foto": fotoBase64
         ]
         
-        // Solo enviamos la contraseña si ha escrito una nueva
-        if !password.isEmpty {
-            body["password"] = password
+        if session.role == "profesional" {
+            body["profesiones"] = Array(profesiones)
         }
         
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        if !password.isEmpty { body["password"] = password }
         
-        URLSession.shared.dataTask(with: request) { data, resp, _ in
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                DispatchQueue.main.async {
-                    // Actualizamos los datos en la pantalla anterior y cerramos
-                    alGuardar(nombre, fotoBase64, telefono, domicilio, password)
-                    dismiss()
-                }
+        do {
+            let exito = try await NetworkService.shared.performSimpleRequest(route: "/perfil/actualizar", method: "POST", body: body)
+            if exito {
+                session.updateProfile(name: nombre, foto: fotoBase64, telefono: telefono, domicilio: domicilio, profesiones: Array(profesiones))
+                dismiss()
+            } else {
+                mensajeAlerta = "Error: El servidor no pudo actualizar el perfil."
+                mostrarAlerta = true
             }
-        }.resume()
+        } catch {
+            mensajeAlerta = "Error de conexión: \(error.localizedDescription)"
+            mostrarAlerta = true
+        }
+        guardando = false
     }
 }
 
@@ -162,15 +184,14 @@ struct PerfilView: View {
 struct CampoFormularioPerfil: View {
     var titulo: String
     @Binding var texto: String
-    var colorTexto: Color
     
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(titulo).bold().foregroundColor(colorTexto)
+            Text(titulo).bold().foregroundColor(Theme.azulTexto)
             TextField("", text: $texto)
                 .padding(12)
                 .background(Color.white)
-                .cornerRadius(10)
+                .cornerRadius(Theme.cornerRadiusCampo)
                 .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 2)
         }
     }
@@ -179,15 +200,14 @@ struct CampoFormularioPerfil: View {
 struct CampoPasswordPerfil: View {
     var titulo: String
     @Binding var texto: String
-    var colorTexto: Color
     
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(titulo).bold().foregroundColor(colorTexto)
+            Text(titulo).bold().foregroundColor(Theme.azulTexto)
             SecureField("Dejar en blanco para no cambiar", text: $texto)
                 .padding(12)
                 .background(Color.white)
-                .cornerRadius(10)
+                .cornerRadius(Theme.cornerRadiusCampo)
                 .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 2)
         }
     }

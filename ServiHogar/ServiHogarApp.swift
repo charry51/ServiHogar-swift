@@ -2,9 +2,24 @@ import SwiftUI
 
 @main
 struct ServiHogarApp: App {
+    @StateObject private var session = UserSession()
+    
     var body: some Scene {
         WindowGroup {
-            ContentView() // <--- EL CAMBIO ESTÁ AQUÍ
+            NavigationStack {
+                Group {
+                    if session.isAuthenticated {
+                        if session.role == "cliente" {
+                            HomeClienteView()
+                        } else {
+                            HomeProfesionalView()
+                        }
+                    } else {
+                        ContentView()
+                    }
+                }
+            }
+            .environmentObject(session)
         }
     }
 }

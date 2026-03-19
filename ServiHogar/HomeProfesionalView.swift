@@ -4,25 +4,19 @@ import SwiftUI
 // PANTALLA PRINCIPAL DEL PROFESIONAL
 // ==========================================
 struct HomeProfesionalView: View {
-    let azulTexto = Color(red: 0, green: 0.38, blue: 0.66)
+    @EnvironmentObject var session: UserSession
     @Environment(\.dismiss) var dismiss
-    
-    @Binding var nombreUsuario: String
-    var idUsuario: Int
-    @Binding var fotoUsuario: String
-    @Binding var telefonoUsuario: String
-    @Binding var domicilioUsuario: String
-    var alCerrarSesion: () -> Void
     
     @State private var estaActivo = true
     @State private var pestañaSeleccionada = "Solicitudes"
     @State private var listaSolicitudes: [ModeloSolicitud] = []
+    @State private var cargando = false
     
     var body: some View {
         VStack(spacing: 0) {
             // CABECERA
             HStack(alignment: .top) {
-                Button(action: alCerrarSesion) {
+                Button(action: { session.logout() }) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
                         .bold()
                         .foregroundColor(.white)
@@ -32,77 +26,65 @@ struct HomeProfesionalView: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 5) {
-                    Text("Bienvenido").font(.system(size: 18, weight: .bold)).foregroundColor(azulTexto)
-                    Text(nombreUsuario).font(.system(size: 24, weight: .bold)).foregroundColor(azulTexto)
+                    Text("Bienvenido").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.azulTexto)
+                    Text(session.nombre).font(.system(size: 24, weight: .bold)).foregroundColor(Theme.azulTexto)
                     Toggle(estaActivo ? "Activo" : "Inactivo", isOn: $estaActivo).labelsHidden().tint(.green)
                 }
                 
                 // NAVEGACIÓN AL PERFIL
-                NavigationLink(destination: PerfilView(
-                    nombre: nombreUsuario,
-                    id: idUsuario,
-                    fotoBase64: fotoUsuario,
-                    telefono: telefonoUsuario,
-                    domicilio: domicilioUsuario,
-                    esProfesional: true,
-                    alCerrarSesion: { dismiss(); self.alCerrarSesion() },
-                    alGuardar: { n, f, t, d, _ in
-                        self.nombreUsuario = n
-                        self.fotoUsuario = f
-                        self.telefonoUsuario = t
-                        self.domicilioUsuario = d
-                    }
-                )) {
-                    ZStack {
-                        if let data = Data(base64Encoded: fotoUsuario), let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage).resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "person.crop.circle.fill").resizable().foregroundColor(.white)
-                        }
-                    }.frame(width: 50, height: 50).clipShape(Circle()).background(Circle().fill(azulTexto)).padding(.leading, 10)
+                NavigationLink(destination: PerfilView()) {
+                    ImagenPerfil(foto: session.foto)
                 }
-            }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 20)
+            }.padding(.horizontal, Theme.paddingHorizontal).padding(.top, 10).padding(.bottom, 20)
             
             // PESTAÑAS (Solicitudes / Historial)
             HStack(spacing: 15) {
                 BotonPestaña(titulo: "Solicitudes", seleccionada: $pestañaSeleccionada)
                 BotonPestaña(titulo: "Historial", seleccionada: $pestañaSeleccionada)
-            }.padding(.horizontal, 20).padding(.bottom, 20).onChange(of: pestañaSeleccionada) { _ in self.cargarTrabajos() }
+            }.padding(.horizontal, Theme.paddingHorizontal).padding(.bottom, 20).onChange(of: pestañaSeleccionada) { _ in Task { await cargarTrabajos() } }
             
             // LISTA DE TRABAJOS
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 15) {
-                    if !estaActivo {
+                    if cargando {
+                        ProgressView().tint(Theme.azulTexto).padding(.top, 50)
+                    } else if !estaActivo {
                         VStack {
                             Spacer()
-                            Image(systemName: "moon.zzz.fill").font(.system(size: 50)).foregroundColor(azulTexto)
-                            Text("Estás inactivo").bold().foregroundColor(azulTexto)
+                            Image(systemName: "moon.zzz.fill").font(.system(size: 50)).foregroundColor(Theme.azulTexto)
+                            Text("Estás inactivo").bold().foregroundColor(Theme.azulTexto)
                             Spacer()
                         }.frame(height: 300)
                     } else {
                         ForEach(listaSolicitudes) { sol in
-                            TarjetaSolicitud(solicitud: sol, profesionalID: idUsuario) { self.cargarTrabajos() }
+                            TarjetaSolicitud(solicitud: sol) { Task { await cargarTrabajos() } }
                         }
                     }
-                }.padding(.horizontal, 20)
+                }.padding(.horizontal, Theme.paddingHorizontal)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Image("FondoPrincipal").resizable().scaledToFill().ignoresSafeArea())
+        .background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
-        .onAppear { self.cargarTrabajos() }
+        .onAppear { Task { await cargarTrabajos() } }
     }
     
     // CARGAR DATOS DESDE LARAVEL
-    func cargarTrabajos() {
+    func cargarTrabajos() async {
+        cargando = true
         let tipo = pestañaSeleccionada == "Solicitudes" ? "pendientes" : "historial"
-        guard let url = URL(string: "http://127.0.0.1:8000/api/solicitudes/\(tipo)/\(idUsuario)") else { return }
+        let route = "/solicitudes/\(tipo)/\(session.id)"
         
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            if let data = data, let decodificado = try? JSONDecoder().decode([ModeloSolicitud].self, from: data) {
-                DispatchQueue.main.async { self.listaSolicitudes = decodificado }
+        do {
+            let decodificado: [ModeloSolicitud] = try await NetworkService.shared.performRequest(route: route)
+            DispatchQueue.main.async {
+                self.listaSolicitudes = decodificado
+                self.cargando = false
             }
-        }.resume()
+        } catch {
+            print("Error cargando trabajos: \(error)")
+            self.cargando = false
+        }
     }
 }
 
@@ -110,16 +92,15 @@ struct HomeProfesionalView: View {
 // TARJETA DE SOLICITUD INDIVIDUAL (BOTONES GRANDES)
 // ==========================================
 struct TarjetaSolicitud: View {
+    @EnvironmentObject var session: UserSession
     var solicitud: ModeloSolicitud
-    var profesionalID: Int
     var alAceptar: () -> Void
-    let azulTexto = Color(red: 0, green: 0.38, blue: 0.66)
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading) {
-                    Text(solicitud.cliente?.name ?? "Cliente").bold().foregroundColor(azulTexto)
+                    Text(solicitud.cliente?.name ?? "Cliente").bold().foregroundColor(Theme.azulTexto)
                     Text(solicitud.categoria ?? "").font(.caption).foregroundColor(.gray)
                 }
                 Spacer()
@@ -151,14 +132,14 @@ struct TarjetaSolicitud: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
-                        .buttonStyle(BorderlessButtonStyle()) // Previene bloqueos táctiles
+                        .buttonStyle(BorderlessButtonStyle())
                     }
                 }
                 
                 // LÓGICA DE ESTADOS (Los 3 pasos del trabajo)
                 if solicitud.estado == "pendiente" || solicitud.estado == nil {
                     // PASO 1: BOTÓN ACEPTAR (VERDE)
-                    Button(action: aceptar) {
+                    Button(action: { Task { await aceptar() } }) {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                             Text("Aceptar")
@@ -170,11 +151,11 @@ struct TarjetaSolicitud: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    .buttonStyle(BorderlessButtonStyle()) // Previene bloqueos táctiles
+                    .buttonStyle(BorderlessButtonStyle())
                     
                 } else if solicitud.estado == "aceptado" {
                     // PASO 2: BOTÓN TERMINAR TAREA (NARANJA)
-                    Button(action: completar) {
+                    Button(action: { Task { await completar() } }) {
                         HStack {
                             Image(systemName: "flag.checkered.circle.fill")
                             Text("Terminar")
@@ -186,7 +167,7 @@ struct TarjetaSolicitud: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    .buttonStyle(BorderlessButtonStyle()) // Previene bloqueos táctiles
+                    .buttonStyle(BorderlessButtonStyle())
                     
                 } else {
                     // PASO 3: TRABAJO COMPLETADO (GRIS INACTIVO)
@@ -202,45 +183,37 @@ struct TarjetaSolicitud: View {
                     .cornerRadius(10)
                 }
             }
-            .padding(.top, 10) // Un poco de espacio respecto a la descripción
+            .padding(.top, 10)
             
         }
         .padding()
         .background(Color.white)
-        .cornerRadius(15)
+        .cornerRadius(Theme.cornerRadiusTarjeta)
         .shadow(radius: 3)
     }
     
     // --- FUNCIONES DE RED ---
-    func aceptar() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/solicitudes/aceptar") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body: [String: Any] = ["solicitud_id": solicitud.id, "profesional_id": profesionalID]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { data, resp, _ in
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+    func aceptar() async {
+        let body: [String: Any] = ["solicitud_id": solicitud.id, "profesional_id": session.id]
+        do {
+            let exito = try await NetworkService.shared.performSimpleRequest(route: "/solicitudes/aceptar", method: "POST", body: body)
+            if exito {
                 DispatchQueue.main.async { alAceptar() }
             }
-        }.resume()
+        } catch {
+            print("Error aceptando: \(error)")
+        }
     }
     
-    func completar() {
-        guard let url = URL(string: "http://127.0.0.1:8000/api/solicitudes/completar") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+    func completar() async {
         let body: [String: Any] = ["solicitud_id": solicitud.id]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { data, resp, _ in
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+        do {
+            let exito = try await NetworkService.shared.performSimpleRequest(route: "/solicitudes/completar", method: "POST", body: body)
+            if exito {
                 DispatchQueue.main.async { alAceptar() }
             }
-        }.resume()
+        } catch {
+            print("Error completando: \(error)")
+        }
     }
 }
