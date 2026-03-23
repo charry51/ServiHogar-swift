@@ -19,6 +19,7 @@ struct ServiHogarApp: App {
                     }
                 }
             }
+            .id(session.navigationId)
             .environmentObject(session)
         }
     }

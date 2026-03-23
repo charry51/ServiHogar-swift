@@ -5,6 +5,7 @@ import Combine
 class UserSession: ObservableObject {
     @Published var currentUser: DatosUsuario?
     @Published var isAuthenticated: Bool = false
+    @Published var navigationId = UUID()
     
     // Propiedades rápidas para acceder a los datos del usuario
     var nombre: String { currentUser?.name ?? "Usuario" }
@@ -36,5 +37,9 @@ class UserSession: ObservableObject {
             domicilio: domicilio,
             profesiones: profesiones ?? current.profesiones
         )
+    }
+    
+    func popToRoot() {
+        self.navigationId = UUID()
     }
 }

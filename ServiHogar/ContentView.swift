@@ -24,16 +24,15 @@ struct ContentView: View {
                 }
                 
                 Button(action: { Task { await hacerLogin() } }) {
-                    if cargando {
-                        ProgressView().tint(Theme.azulTexto)
-                    } else {
-                        Text("Enviar").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.azulTexto)
+                    Group {
+                        if cargando {
+                            ProgressView().tint(Theme.azulTexto)
+                        } else {
+                            Text("Enviar")
+                        }
                     }
+                    .estiloBotonPrincipal()
                 }
-                .frame(width: 160, height: 45)
-                .background(Color.white)
-                .cornerRadius(Theme.cornerRadiusBoton)
-                .shadow(radius: 5)
                 .padding(.top, 10)
                 .disabled(cargando)
                 
@@ -73,10 +72,10 @@ struct BienvenidoView: View {
         VStack(spacing: 40) {
             Text("¡ Bienvenido !").font(.system(size: 28, weight: .bold)).foregroundColor(Theme.azulTexto).padding(.top, 60)
             NavigationLink(destination: RegistroClienteView()) {
-                Text("Cliente").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(Theme.cornerRadiusBoton).shadow(radius: 5)
+                Text("Cliente").estiloBotonPrincipal(ancho: 200)
             }
             NavigationLink(destination: RegistroProfesionalView()) {
-                Text("Trabajador").font(.system(size: 18, weight: .bold)).foregroundColor(Theme.azulTexto).frame(width: 200, height: 50).background(Color.white).cornerRadius(Theme.cornerRadiusBoton).shadow(radius: 5)
+                Text("Trabajador").estiloBotonPrincipal(ancho: 200)
             }
             Spacer()
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
@@ -94,7 +93,7 @@ struct RegistroClienteView: View {
             CampoFormulario(titulo: "Teléfono", texto: $telefono, colorTexto: Theme.azulTexto)
             Spacer()
             NavigationLink(destination: RegistroClientePaso2View(nombre: nombre, dni: dni, domicilio: domicilio, telefono: telefono)) {
-                Text("Siguiente >").bold().foregroundColor(Theme.azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(Theme.cornerRadiusBoton).shadow(radius: 5)
+                Text("Siguiente >").estiloBotonPrincipal(ancho: 160)
             }.padding(.bottom, 40)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
     }
@@ -111,13 +110,15 @@ struct RegistroClientePaso2View: View {
             CampoPassword(titulo: "Contraseña", texto: $pass, colorTexto: Theme.azulTexto)
             Spacer()
             Button(action: { Task { await registrar() } }) {
-                if cargando {
-                    ProgressView().tint(.white)
-                } else {
-                    Text("Finalizar").bold().foregroundColor(.white)
+                Group {
+                    if cargando {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text("Finalizar")
+                    }
                 }
+                .estiloBotonPrincipal(colorFondo: Theme.azulBoton, colorTexto: .white)
             }
-            .frame(width: 160, height: 45).background(Theme.azulBoton).cornerRadius(Theme.cornerRadiusBoton)
             .padding(.bottom, 40)
             .disabled(cargando)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
@@ -128,15 +129,7 @@ struct RegistroClientePaso2View: View {
         let body: [String: Any] = ["name": nombre, "email": email, "password": pass, "role": "cliente", "dni": dni, "telefono": telefono, "domicilio": domicilio]
         do {
             let _: RespuestaLogin = try await NetworkService.shared.performRequest(route: "/register", method: "POST", body: body)
-            // Automáticamente logueamos tras registro si el API devuelve el user, o simplemente redirigimos al login
-            // En este caso, el root view saltará al Home en cuanto detecte auth si el API devuelve el user
-            // Para simplificar, asumimos que el usuario debe loguearse ahora o que el API devuelve el user
-            // El usuario dijo "Haz los cambios que has dicho", así que voy a disparar el login
-            let loginBody = ["email": email, "password": pass]
-            let respuesta: RespuestaLogin = try await NetworkService.shared.performRequest(route: "/login", method: "POST", body: loginBody)
-            if let user = respuesta.user {
-                session.login(user: user)
-            }
+            DispatchQueue.main.async { session.popToRoot() }
         } catch {
             print("Error en registro: \(error)")
         }
@@ -163,7 +156,7 @@ struct RegistroProfesionalView: View {
             }.padding(.horizontal)
             Spacer()
             NavigationLink(destination: RegistroProfesionalPaso2View(nombre: nombre, dni: dni, telefono: telefono, profesiones: Array(profs))) {
-                Text("Siguiente").bold().foregroundColor(Theme.azulTexto).frame(width: 140, height: 45).background(Color.white).cornerRadius(Theme.cornerRadiusBoton).shadow(radius: 5)
+                Text("Siguiente").estiloBotonPrincipal(ancho: 160)
             }.padding(.bottom, 30)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
     }
@@ -179,12 +172,16 @@ struct RegistroProfesionalPaso2View: View {
             CampoFormulario(titulo: "Email", texto: $email, colorTexto: Theme.azulTexto)
             CampoPassword(titulo: "Contraseña", texto: $pass, colorTexto: Theme.azulTexto)
             Button(action: { Task { await registrar() } }) {
-                if cargando {
-                    ProgressView().tint(.white)
-                } else {
-                    Text("Registrarme").bold().foregroundColor(.white)
+                Group {
+                    if cargando {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text("Registrarme")
+                    }
                 }
-            }.buttonStyle(.borderedProminent).tint(Theme.azulBoton).padding()
+                .estiloBotonPrincipal(colorFondo: Theme.azulBoton, colorTexto: .white)
+            }
+            .padding(.bottom, 40)
             .disabled(cargando)
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Image(Theme.fondoPrincipal).resizable().scaledToFill().ignoresSafeArea())
     }
@@ -194,11 +191,7 @@ struct RegistroProfesionalPaso2View: View {
         let body: [String: Any] = ["name": nombre, "email": email, "password": pass, "role": "profesional", "dni": dni, "telefono": telefono, "profesiones": profesiones]
         do {
             let _: RespuestaLogin = try await NetworkService.shared.performRequest(route: "/register", method: "POST", body: body)
-            let loginBody = ["email": email, "password": pass]
-            let respuesta: RespuestaLogin = try await NetworkService.shared.performRequest(route: "/login", method: "POST", body: loginBody)
-            if let user = respuesta.user {
-                session.login(user: user)
-            }
+            DispatchQueue.main.async { session.popToRoot() }
         } catch {
             print("Error en registro: \(error)")
         }
@@ -289,6 +282,27 @@ struct CampoPassword: View {
                 .cornerRadius(Theme.cornerRadiusCampo)
                 .shadow(color: Color.black.opacity(0.05), radius: 2)
         }.padding(.horizontal, 40)
+    }
+}
+
+struct EstiloBotonVisual: ViewModifier {
+    var ancho: CGFloat
+    var colorFondo: Color
+    var colorTexto: Color
+    func body(content: Content) -> some View {
+        content
+            .font(.system(size: 18, weight: .bold))
+            .foregroundColor(colorTexto)
+            .frame(width: ancho, height: 45)
+            .background(colorFondo)
+            .cornerRadius(Theme.cornerRadiusBoton)
+            .shadow(radius: 5)
+    }
+}
+
+extension View {
+    func estiloBotonPrincipal(ancho: CGFloat = 160, colorFondo: Color = .white, colorTexto: Color = Theme.azulTexto) -> some View {
+        self.modifier(EstiloBotonVisual(ancho: ancho, colorFondo: colorFondo, colorTexto: colorTexto))
     }
 }
 
